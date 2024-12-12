@@ -17,6 +17,8 @@ from telegram.ext import (
     ContextTypes,
 )
 
+from sql_logger import SQLiteLogger
+
 # Load .env file
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -25,15 +27,15 @@ def parse_time(timestamp_str: str) -> datetime:
     parsed_time = datetime.fromisoformat(timestamp_str.rstrip('Z')[:26])
     return parsed_time
 
-@dataclass
-class Logger:
-    log: list[dict[str, any]] = field(default_factory=list)
+# @dataclass
+# class Logger:
+#     log: list[dict[str, any]] = field(default_factory=list)
     
-    def __post_init__(self):
-        self.log = []
+#     def __post_init__(self):
+#         self.log = []
     
-    def record(self, answer: dict[str, any]):
-        self.log.append(answer)
+#     def record(self, answer: dict[str, any]):
+#         self.log.append(answer)
 
 
 @dataclass
@@ -42,7 +44,7 @@ class Ollama:
     model: str = "llama2-uncensored"
     
     def __post_init__(self):
-        self.Log: Logger = Logger()
+        self.Log: SQLiteLogger = SQLiteLogger("TwinAI_log")
     
     def parse_response(self, data: str) -> dict[str, any]:
         answer = ""
@@ -65,18 +67,20 @@ class Ollama:
         output["time"] = time_start
         return output
     
-    def ask(self, question: str) -> dict[str, any]:
+    def ask(self, message_payload: dict[str,str]) -> dict[str, any]:
+        question = message_payload['question']
         response = requests.post(self.url, json={"model": self.model, "prompt": question})
         if response.status_code == 200:
             answer = self.parse_response(response.text)
-            answer['question'] = question
         else:
             answer = dict()
-            answer['question'] = question
             answer['answer'] = "Error"
-            answer['execution_time'] = 0
+            answer['execution_time'] = None
             answer['time'] = datetime.now()
-        self.Log.record(answer=answer)
+
+        for key in message_payload.keys():
+            answer[key] = message_payload[key]
+        self.Log(answer)
         return answer
     
 @dataclass
@@ -109,24 +113,46 @@ class TelegramAgent:
             else:
                 tmp_block['format'] = 'MarkdownV2'
                 tmp_block['text'] = f"```{split_answer[i]}```"
-            answer_blocks.append(tmp_block)
+            # We don't want to add empty blocks
+            # This could happen if split happens at the beginning or end of the string
+            if tmp_block['text'] != "":
+                answer_blocks.append(tmp_block)
         answer_blocks.append(
             {
                 'format': 'HTML',
-                'text': f"🕒 <i>Time elapsed: {answer_dict['execution_time']:.2f} s</i>"
+                'text': f"🕒 <i>Time elapsed: {answer_dict['execution_time']:.2f}s</i>"
             }
-        )        
+        )
         return answer_blocks
+    
+    def get_attributes_from_message(self, update: Update) -> dict[str, str]:
+        first_name = update.effective_chat.first_name
+        last_name = update.effective_chat.last_name
+        username = update.effective_chat.username
+        user_id = update.effective_user.id
+        question = update.message.text
+        message_payload = {
+            "first_name": first_name,
+            "last_name": last_name,
+            "username": username,
+            "user_id": user_id,
+            "question": question
+        }
+        return message_payload
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        question = update.message.text
+        message_payload = self.get_attributes_from_message(update)
+        question = message_payload
         # Here you can integrate with Ollama or any other logic
-        answer_dict = self.Model_AI.ask(question)
-        answer_blocks = self.format_answer(answer_dict)
-        for block in answer_blocks:
-            answer = block['text']
-            format = block['format']
-            await update.message.reply_text(answer, parse_mode=format)
+        try:
+            answer_dict = self.Model_AI.ask(question)
+            answer_blocks = self.format_answer(answer_dict)
+            for block in answer_blocks:
+                answer = block['text']
+                format = block['format']
+                await update.message.reply_text(answer, parse_mode=format)
+        except Exception as e:
+            await update.message.reply_text("❌ <b>An error occurred. Please try again.</b>", parse_mode=ParseMode.HTML)
 
     def run(self):
         self.application.run_polling()
