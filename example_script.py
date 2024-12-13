@@ -23,9 +23,10 @@ LOGGER_DIRECTORY_PATH: str = "./"
 DISCLAIMER_MESSAGE = (
     "<b>✨ Didac's Digital Twinbot ✨</b>\n\n"
     "Welcome to the Twinbot! This AI-powered assistant 🤖 is a fun proof of concept 🚀, created using Ollama 🦙 and trained on data inspired by my real-life experiences 🌟.\n"
-    "To keep things safe and private 🔒, I've carefully curated the dataset to avoid sharing too much personal information 🤫.\n\n"
-    "<i>As this is an experimental setup 🛠️ running on compact and energy-efficient hardware 🔋, the Twinbot operates on a Raspberry Pi 5 💻 (without a GPU 🧠). This may result in slightly longer response times ⏳.\n"
-    "Thanks for your patience and enjoy the experience! 😉</i>"
+    "To keep things safe and private 🔒, I've carefully curated the dataset to avoid sharing too much personal information 🤫.\n"
+    "To interact with the Twinbot, simply ask any question you’d like to know about me 💬.\n\n"
+    "<i>As this is an experimental setup 🛠️ running on compact and energy-efficient hardware 🔋, the Twinbot operates on a Raspberry Pi 5 💻 (without a GPU 🧠). This may result in slightly longer response times ⏳.</i>\n\n"
+    "Thanks for your patience and enjoy the experience! 😉"
 )
 # Minimum time between disclaimer messages (in seconds)
 MIN_TIME_BETWEEN_DISCLAIMERS = 24 * 60 * 60  # 24 hours

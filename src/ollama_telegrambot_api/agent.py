@@ -48,7 +48,6 @@ class OllamaAPI:
         question = message_payload['question']
         print(f"Question: {question}")
         response = requests.post(self.url, json={"model": self.model, "prompt": question})
-        print(f"Response: {response}")
         if response.status_code == 200:
             answer = self.parse_response(response.text)
             answer['error'] = False
