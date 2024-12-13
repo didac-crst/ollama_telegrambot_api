@@ -3,6 +3,8 @@ from time import time
 import sqlite3
 import os
 
+import pandas as pd
+
 @dataclass
 class SQLiteLogger:
     logger_name: str
@@ -79,6 +81,20 @@ class SQLiteLogger:
             VALUES (?, ?, ?, ?)
         """, (user_id, username, first_name, last_name))
         self.conn.commit()
+        
+    def find_records_user(self, user_id: int) -> pd.DataFrame:
+        """
+        Find a user in the database.
+        
+        :param user_id: User ID.
+        :return: User information.
+        """
+        query = f"""
+            SELECT * FROM Logs
+            WHERE user_id = {user_id}
+        """
+        records = pd.read_sql(sql=query, con=self.conn)
+        return records
     
     def find_user(self, user_id: int):
         """
@@ -109,6 +125,49 @@ class SQLiteLogger:
             VALUES (?, ?, ?, ?, ?, ?)
         """, (user_id, timestamp, question, answer, execution_time, error))
         self.conn.commit()
+        
+    def find_records_user(self, user_id: int) -> pd.DataFrame:
+        """
+        Find the records for a given user.
+        
+        :param user_id: User ID.
+        :return: User information.
+        """
+        self.connect()
+        query = f"""
+            SELECT * FROM Logs
+            WHERE user_id = {user_id}
+        """
+        records = pd.read_sql(sql=query, con=self.conn)
+        self.close()
+        return records
+    
+    def find_last_record_user(self, user_id: int) -> int:
+        """
+        Find the timestamp of the last record for a given user.
+        
+        :param user_id: User ID.
+        :return: Last record for the user.
+        """
+        records = self.find_records_user(user_id)
+        if records.empty:
+            return 0
+        last_record_timestamp = records.timestamp.max()
+        return last_record_timestamp
+        
+    def get_user_logs(self, user_id: int):
+        """
+        Get all the logs for a user.
+        
+        :param user_id: User ID.
+        :return: Logs for the user.
+        """
+        self.cursor.execute(f"""
+            SELECT * FROM Logs
+            WHERE user_id = ?
+        """, (user_id,))
+        self.cursor.fetchall
+        return self.cursor.fetchall()
     
     def __call__(self, answer_dict: dict[str, any]) -> None:
         """

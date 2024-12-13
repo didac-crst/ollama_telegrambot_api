@@ -74,6 +74,8 @@ class TelegramAgent:
     ollama_model: str
     logger_name: str
     telegram_token: str
+    disclaimer_message: str
+    min_time_between_disclaimers: int = 3600 # Default value is 1 hour
     logger_directory_path: str = "./"
 
     def __post_init__(self):
@@ -91,7 +93,7 @@ class TelegramAgent:
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        await update.message.reply_text('Hi! Send me a question and I will answer it.')
+        await update.message.reply_text(self.disclaimer_message, parse_mode=ParseMode.HTML)
         
     def format_answer(self, answer_dict: dict[str, any]) -> dict[str, str]:
         answer = answer_dict['answer']
@@ -131,9 +133,24 @@ class TelegramAgent:
             "question": question
         }
         return message_payload
+    
+    async def send_disclaimer_message(self, update: Update) -> None:
+        """
+        Send a disclaimer message to the user if the time between messages is greater than the minimum time between disclaimers.
+        
+        """
+        now = time()
+        user_id = update.effective_user.id
+        last_record_timestamp = self.chatOllama.Log.find_last_record_user(user_id)
+        if now - last_record_timestamp > self.min_time_between_disclaimers:
+            await self.start(update, None)
+            
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         message_payload = self.get_attributes_from_message(update)
+        # Send disclaimer message only if the time between messages is greater than the minimum time between disclaimers
+        if (len(self.disclaimer_message) > 0) and (self.min_time_between_disclaimers > 0):
+            await self.send_disclaimer_message(update)
         question = message_payload
         # Here you can integrate with Ollama or any other logic
         answer_dict = self.chatOllama.ask(question)
@@ -147,4 +164,5 @@ class TelegramAgent:
             await update.message.reply_text("❌ <b>An error occurred. Please try again.</b>", parse_mode=ParseMode.HTML)
 
     def run(self):
+        print("Running the bot...")
         self.application.run_polling()
