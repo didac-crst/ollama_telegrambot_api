@@ -1,0 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# environment files
+.env
+.env.enc
+
+# certificates
+*.crt
+*.key
+*.ovpn
+credentials.*
+openvpn_config/
+
+# Virtual environment
+.venv/
+
+# Notebooks
+*.ipynb
+notebooks/
+
+# Database
+*.db
+
+# Data
+*.feather
+*.csv
+*.pickle
+*.pkl
+
+# Models
+*.h5
+
+# Logs
+*.log
+
+# Other
+.DS_Store
