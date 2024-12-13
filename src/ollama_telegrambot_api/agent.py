@@ -163,12 +163,11 @@ class TelegramAgent:
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Send disclaimer message
-        print(update)
         if (len(self.disclaimer_message) > 0):
             await update.message.reply_text(self.disclaimer_message, parse_mode=ParseMode.HTML)
             msg = "Disclaimer message sent."
         else:
-            msg = ""
+            msg = "Nothing has been sent."
         # Log the user
         answer_dict = {
             "user_id": update.effective_user.id,
