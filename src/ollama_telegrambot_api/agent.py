@@ -6,6 +6,7 @@ import os
 import re
 import requests
 from time import time
+from typing import Optional
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -19,16 +20,85 @@ from telegram.ext import (
 
 from .sql_logger import SQLiteLogger
 
+@dataclass
+class TelegramNotificator:
+    """ 
+    Class to provide a Telegram notification system.
+    
+    This class allows to inform the administrator about the requests made to the bot in real-time.
+    
+    """
+    telegram_token: str
+    notification_telegram_id: Optional[str]
+    
+    def __post_init__(self) -> None:
+        # The active attribute will be used to determine if the notification system is active or not
+        # It's useful as it won't be necessary to check if the notification_telegram_id is None every time
+        if self.notification_telegram_id is not None:
+            self.url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
+            self.chat_id = self.notification_telegram_id
+            self.active = True
+        else:
+            self.active = False
+    
+    def send_telegram_message(self, msg: str) -> None:
+        """
+        Send a message to the chat_id asynchronously
+
+        """
+        if self.active:
+            payload = {
+                "chat_id": self.chat_id,
+                "text": msg,
+                "parse_mode": "HTML",
+            }
+            try:
+                response = requests.post(self.url, data=payload)
+                if response.status_code == 200:
+                    print("Notification sent successfully")
+                else:
+                    print(f"Failed to send notification: {response.status_code}")
+                    print(response.text)
+            except Exception as e:
+                print(f"An error occurred while trying to send a notification: {e}")
+    
+    def send_message(self,
+                    user_id: str,
+                    first_name: str,
+                    last_name: str,
+                    username: str,
+                    question: str,
+                    answer: Optional[str],
+                    execution_time: Optional[float],
+                    error: Optional[bool] = None, # To match the kwargs of the answer_dict
+                    time: Optional[float] = None, # To match the kwargs of the answer_dict
+                    ) -> None:
+        """
+        Send a message to the chat_id with the information about the request made to the bot
+
+        """
+        if self.active:
+            msg = (
+                f"👤 <b>User:</b>\n"
+                f"     •ID: {user_id}\n"
+                f"     •Username: {username}\n"
+                f"     •Name: {first_name} {last_name}\n\n"
+                f"💬 <b>Question:</b>\n{html.escape(question)}\n\n"
+            )
+            if answer:
+                msg += (
+                f"🧠 <b>Answer:</b>\n{html.escape(answer)}\n\n"
+                )
+            if execution_time:
+                msg += (
+                f"⏱️ <i><b>Execution time:</b> {execution_time:.2f}s</i>"
+                )
+            self.send_telegram_message(msg)
 
 @dataclass
 class OllamaAPI:
     url: str
     model: str
-    logger_name: str
-    logger_directory_path: str
-    
-    def __post_init__(self):
-        self.Log: SQLiteLogger = SQLiteLogger(logger_name=self.logger_name, directory_path=self.logger_directory_path)
     
     def parse_response(self, data: str) -> dict[str, any]:
         answer = ""
@@ -61,7 +131,6 @@ class OllamaAPI:
         end_time = time()
         answer["time"] = start_time
         answer['execution_time'] = end_time - start_time
-        self.Log(answer)
         return answer
     
 @dataclass
@@ -73,16 +142,17 @@ class TelegramAgent:
     ollama_model: str
     logger_name: str
     telegram_token: str
+    notification_telegram_id: str
     disclaimer_message: str
     min_time_between_disclaimers: int = 3600 # Default value is 1 hour
     logger_directory_path: str = "./"
 
     def __post_init__(self):
+        self.Notifier: TelegramNotificator = TelegramNotificator(telegram_token=self.telegram_token, notification_telegram_id=self.notification_telegram_id)
+        self.Log: SQLiteLogger = SQLiteLogger(logger_name=self.logger_name, directory_path=self.logger_directory_path)
         self.chatOllama: OllamaAPI = OllamaAPI(
             url=self.ollama_url,
             model=self.ollama_model,
-            logger_name=self.logger_name,
-            logger_directory_path=self.logger_directory_path,
         )
         self.application = ApplicationBuilder().token(self.telegram_token).build()
         self.add_handlers()
@@ -92,7 +162,26 @@ class TelegramAgent:
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        await update.message.reply_text(self.disclaimer_message, parse_mode=ParseMode.HTML)
+        # Send disclaimer message
+        print(update)
+        if (len(self.disclaimer_message) > 0):
+            await update.message.reply_text(self.disclaimer_message, parse_mode=ParseMode.HTML)
+            msg = "Disclaimer message sent."
+        else:
+            msg = ""
+        # Log the user
+        answer_dict = {
+            "user_id": update.effective_user.id,
+            "username": update.effective_user.username,
+            "first_name": update.effective_user.first_name,
+            "last_name": update.effective_user.last_name,
+            "question": "/start",
+            "answer": msg,
+            "execution_time": 0.0,
+            "error": False
+        }
+        self.Log(answer_dict=answer_dict)
+        self.Notifier.send_message(**answer_dict)
         
     def format_answer(self, answer_dict: dict[str, any]) -> dict[str, str]:
         answer = answer_dict['answer']
@@ -135,24 +224,29 @@ class TelegramAgent:
     
     async def send_disclaimer_message(self, update: Update) -> None:
         """
-        Send a disclaimer message to the user if the time between messages is greater than the minimum time between disclaimers.
+        Send the disclaimer message to the user only if the time between messages is greater than the minimum time between disclaimers
         
         """
-        now = time()
-        user_id = update.effective_user.id
-        last_record_timestamp = self.chatOllama.Log.find_last_record_user(user_id)
-        if now - last_record_timestamp > self.min_time_between_disclaimers:
-            await self.start(update, None)
-            
+        if self.min_time_between_disclaimers > 0:
+            now = time()
+            user_id = update.effective_user.id
+            last_record_timestamp = self.Log.find_last_record_user(user_id)
+            if now - last_record_timestamp > self.min_time_between_disclaimers:
+                await self.start(update, None)
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         message_payload = self.get_attributes_from_message(update)
         # Send disclaimer message only if the time between messages is greater than the minimum time between disclaimers
-        if (len(self.disclaimer_message) > 0) and (self.min_time_between_disclaimers > 0):
-            await self.send_disclaimer_message(update)
+        await self.send_disclaimer_message(update)
         question = message_payload
-        # Here you can integrate with Ollama or any other logic
+        # Notify the administrator about the request made to the bot
+        self.Notifier.send_message(**message_payload, answer=None, execution_time=None)
+        # Ask the question to the chatbot
         answer_dict = self.chatOllama.ask(question)
+        # Notify the administrator about the response from the chatbot
+        self.Notifier.send_message(**answer_dict)
+        # Log the answer
+        self.Log(answer_dict=answer_dict)
         if not answer_dict['error']:
             answer_blocks = self.format_answer(answer_dict)
             for block in answer_blocks:

@@ -6,8 +6,11 @@ from ollama_telegrambot_api.agent import TelegramAgent
 load_dotenv()
 
 # SPECIFIC CONFIGURATIONS - PLEASE CHANGE ACCORDINGLY
-# It is needed to create an .env file with the TELEGRAM_TOKEN
+# It is needed to create an .env file
+# Need to create a Telegrambot and get the token
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+# This is the chat_id (user or group) of the person who will receive the notifications
+NOTIFICATION_TELEGRAM_ID = os.getenv("NOTIFICATION_TELEGRAM_ID")
 # It is important to specify the right model
 OLLAMA_MODEL: str = "tinyllama"
 
@@ -32,11 +35,13 @@ DISCLAIMER_MESSAGE = (
 MIN_TIME_BETWEEN_DISCLAIMERS = 24 * 60 * 60  # 24 hours
 
 def main() -> None:
+    print(NOTIFICATION_TELEGRAM_ID)
     Agent = TelegramAgent(
         ollama_url=OLLAMA_URL,
         ollama_model=OLLAMA_MODEL,
         logger_name=LOGGER_NAME,
         telegram_token=TELEGRAM_TOKEN,
+        notification_telegram_id = NOTIFICATION_TELEGRAM_ID,
         disclaimer_message=DISCLAIMER_MESSAGE,
         min_time_between_disclaimers=MIN_TIME_BETWEEN_DISCLAIMERS,
         logger_directory_path=LOGGER_DIRECTORY_PATH,
