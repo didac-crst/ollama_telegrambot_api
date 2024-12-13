@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
-from dotenv import load_dotenv
 from datetime import datetime
 import html
 import json
 import os
 import re
 import requests
+from time import time
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -17,69 +17,51 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from sql_logger import SQLiteLogger
-
-# Load .env file
-load_dotenv()
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-
-def parse_time(timestamp_str: str) -> datetime:
-    parsed_time = datetime.fromisoformat(timestamp_str.rstrip('Z')[:26])
-    return parsed_time
-
-# @dataclass
-# class Logger:
-#     log: list[dict[str, any]] = field(default_factory=list)
-    
-#     def __post_init__(self):
-#         self.log = []
-    
-#     def record(self, answer: dict[str, any]):
-#         self.log.append(answer)
+from .sql_logger import SQLiteLogger
 
 
 @dataclass
-class Ollama:
-    url: str = "http://localhost:11434/api/generate"
-    model: str = "llama2-uncensored"
+class OllamaAPI:
+    url: str
+    model: str
+    logger_name: str
+    logger_directory_path: str
     
     def __post_init__(self):
-        self.Log: SQLiteLogger = SQLiteLogger("TwinAI_log")
+        self.Log: SQLiteLogger = SQLiteLogger(logger_name=self.logger_name, directory_path=self.logger_directory_path)
     
     def parse_response(self, data: str) -> dict[str, any]:
         answer = ""
         lines = data.split("\n")
-        start = True
         for line in lines:
             json_line=json.loads(line)
-            if start:
-                time_start = parse_time(json_line["created_at"])
-                start = False
             word = json_line["response"]
             answer = answer + word
             if json_line["done"]:
-                time_end = parse_time(json_line["created_at"])
                 break
-        execution_time = (time_end - time_start).total_seconds()
         output = dict()
         output["answer"] = answer
-        output["execution_time"] = execution_time
-        output["time"] = time_start
         return output
     
     def ask(self, message_payload: dict[str,str]) -> dict[str, any]:
+        start_time = time()
         question = message_payload['question']
+        print(f"Question: {question}")
         response = requests.post(self.url, json={"model": self.model, "prompt": question})
+        print(f"Response: {response}")
         if response.status_code == 200:
             answer = self.parse_response(response.text)
+            answer['error'] = False
         else:
+            status_code = response.status_code
             answer = dict()
-            answer['answer'] = "Error"
-            answer['execution_time'] = None
-            answer['time'] = datetime.now()
-
+            answer['answer'] = f"Status Code: {status_code} - {response.text}"
+            answer['error'] = True
         for key in message_payload.keys():
             answer[key] = message_payload[key]
+        end_time = time()
+        answer["time"] = start_time
+        answer['execution_time'] = end_time - start_time
         self.Log(answer)
         return answer
     
@@ -88,10 +70,20 @@ class TelegramAgent:
     """
     Class to handle the Telegram bot
     """
+    ollama_url: str
+    ollama_model: str
+    logger_name: str
+    telegram_token: str
+    logger_directory_path: str = "./"
 
     def __post_init__(self):
-        self.Model_AI: Ollama = Ollama()
-        self.application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+        self.chatOllama: OllamaAPI = OllamaAPI(
+            url=self.ollama_url,
+            model=self.ollama_model,
+            logger_name=self.logger_name,
+            logger_directory_path=self.logger_directory_path,
+        )
+        self.application = ApplicationBuilder().token(self.telegram_token).build()
         self.add_handlers()
 
     def add_handlers(self):
@@ -120,7 +112,7 @@ class TelegramAgent:
         answer_blocks.append(
             {
                 'format': 'HTML',
-                'text': f"🕒 <i>Time elapsed: {answer_dict['execution_time']:.2f}s</i>"
+                'text': f"🕒 <i>Execution time: {answer_dict['execution_time']:.2f}s</i>"
             }
         )
         return answer_blocks
@@ -144,14 +136,14 @@ class TelegramAgent:
         message_payload = self.get_attributes_from_message(update)
         question = message_payload
         # Here you can integrate with Ollama or any other logic
-        try:
-            answer_dict = self.Model_AI.ask(question)
+        answer_dict = self.chatOllama.ask(question)
+        if not answer_dict['error']:
             answer_blocks = self.format_answer(answer_dict)
             for block in answer_blocks:
                 answer = block['text']
                 format = block['format']
                 await update.message.reply_text(answer, parse_mode=format)
-        except Exception as e:
+        else:
             await update.message.reply_text("❌ <b>An error occurred. Please try again.</b>", parse_mode=ParseMode.HTML)
 
     def run(self):

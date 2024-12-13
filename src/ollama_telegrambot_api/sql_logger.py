@@ -5,10 +5,8 @@ import os
 
 @dataclass
 class SQLiteLogger:
-    log_name: str
-    sql_path: str = "./"
-    
-    
+    logger_name: str
+    directory_path: str = "./"
     
     def __post_init__(self):
         """
@@ -18,8 +16,8 @@ class SQLiteLogger:
         :param table_name: Name of the table for logging.
         """
         extension = ".db"
-        self.log_file = f"{self.log_name}{extension}"
-        self.file_path = os.path.join(self.sql_path, self.log_file)
+        self.logger_file = f"{self.logger_name}{extension}"
+        self.file_path = os.path.join(self.directory_path, self.logger_file)
         if not os.path.exists(self.file_path):
             open(self.file_path, 'w').close()
         self.connect()
@@ -61,7 +59,8 @@ class SQLiteLogger:
                 timestamp INTEGER NOT NULL,
                 question TEXT NOT NULL,
                 answer TEXT NOT NULL,
-                execution_time REAL NOT NULL
+                execution_time REAL NOT NULL,
+                error BOOLEAN NOT NULL
             )
         """)
         self.conn.commit()
@@ -94,7 +93,7 @@ class SQLiteLogger:
         """, (user_id,))
         return self.cursor.fetchone()
     
-    def record_log(self, user_id: int, question: str, answer: str, execution_time: float, timestamp: int):
+    def record_log(self, user_id: int, question: str, answer: str, execution_time: float, timestamp: int, error: bool):
         """
         Record a log into the database.
         
@@ -102,11 +101,13 @@ class SQLiteLogger:
         :param question: The question asked.
         :param answer: The answer to the question.
         :param execution_time: Time taken to answer the question.
+        :param timestamp: Timestamp of the log.
+        :param error: Whether an error occurred.
         """
         self.cursor.execute(f"""
-            INSERT INTO Logs (user_id, timestamp, question, answer, execution_time)
-            VALUES (?, ?, ?, ?, ?)
-        """, (user_id, timestamp, question, answer, execution_time))
+            INSERT INTO Logs (user_id, timestamp, question, answer, execution_time, error)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (user_id, timestamp, question, answer, execution_time, error))
         self.conn.commit()
     
     def __call__(self, answer_dict: dict[str, any]) -> None:
@@ -122,13 +123,17 @@ class SQLiteLogger:
         answer = answer_dict['answer']
         execution_time = answer_dict['execution_time']
         timestamp = int(time())
+        error = answer_dict['error']
         # Check if user is already in the database. If not, record the user.
         self.connect()
         if not self.find_user(user_id):
             self.record_user(user_id, username, first_name, last_name)
         # Record the log
-        self.record_log(user_id, question, answer, execution_time, timestamp)
-        print(f"Logged: [{username}] {question[:30]}... -> {answer[:30]}...")
+        self.record_log(user_id, question, answer, execution_time, timestamp, error)
+        if error:
+            print(f"Error: [{username}] {question[:30]}... -> {answer}")
+        else:
+            print(f"Logged: [{username}] {question[:30]}... -> {answer[:30]}...")
         self.close()
         
     def close(self):
