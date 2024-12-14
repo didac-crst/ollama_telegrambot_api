@@ -285,7 +285,7 @@ class TelegramAgent:
             if Response.error:
                 break
             sleep(1)
-            answer = Response.answer + "..."
+            answer = f"<i>{Response.answer}...</i>"
             # We edit the message once we have a message_id
             if message_id:
                 # Edit the message only if the answer has changed
