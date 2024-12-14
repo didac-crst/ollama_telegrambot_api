@@ -35,7 +35,6 @@ DISCLAIMER_MESSAGE = (
 MIN_TIME_BETWEEN_DISCLAIMERS = 24 * 60 * 60  # 24 hours
 
 def main() -> None:
-    print(NOTIFICATION_TELEGRAM_ID)
     Agent = TelegramAgent(
         ollama_url=OLLAMA_URL,
         ollama_model=OLLAMA_MODEL,
