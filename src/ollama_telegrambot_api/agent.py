@@ -88,11 +88,11 @@ class TelegramNotificator:
             )
             if execution_time:
                 msg += (
-                f"⏱️ <i><b>Execution time:</b> {execution_time:.2f}s</i>"
+                f"⏱️ <i><b>Execution time:</b> {execution_time:.2f}s</i>\n\n"
                 )
             if answer:
                 msg += (
-                f"🧠 <b>Answer:</b>\n{html.escape(answer)}\n\n"
+                f"🧠 <b>Answer:</b>\n{html.escape(answer)}"
                 )
             self.send_telegram_message(msg)
             
