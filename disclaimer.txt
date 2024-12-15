@@ -1,0 +1,11 @@
+<b>✨ Didac's Digital Twinbot ✨</b>
+
+Welcome 👋 to the Twinbot! This AI-powered assistant 🤖 is a proof of concept 🚀, created using Ollama 🦙 and trained on data inspired by my real-life experiences 🌟.
+
+To ensure safety and privacy 🔒, the dataset has been carefully curated 🧐 to avoid sharing sensitive personal information 🤫.
+
+You can interact with the Twinbot 💬 by asking any question ❓ you'd like to know about me 🤔.
+
+<i>As this is an experimental 🧪 setup operating on compact, energy-efficient 🔋 hardware — specifically a Raspberry Pi 5 💻 without a GPU 🧠 — running times may be slightly longer 🐢. But hey, good things are worth the wait ⏳.</i>
+
+Thank you 🙏 for playing along 🎲, and enjoy the experience! 😉
