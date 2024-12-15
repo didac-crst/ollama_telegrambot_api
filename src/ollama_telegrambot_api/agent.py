@@ -9,6 +9,7 @@ import threading
 from time import time, sleep
 from typing import Optional
 
+import numpy as np
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -281,22 +282,38 @@ class TelegramAgent:
     async def stream_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         message_id = None
         Response = self.chatOllama.Response
+        parse_mode = ParseMode.HTML
+        # To avoid sending to much messages to Telegram, we well decrease the frequency of the messages as the answer is being longer.
+        while_iteration = 1
         while not Response.answer_finished:
-            if Response.error:
-                break
-            sleep(1)
-            answer = f"<i>{Response.answer}...</i>"
-            # We edit the message once we have a message_id
-            if message_id:
-                # Edit the message only if the answer has changed
-                if answer != previous_answer:
-                    await context.bot.edit_message_text(chat_id=update.effective_chat.id, message_id=message_id, text=answer, parse_mode=ParseMode.HTML)
-            # If there is no message sent yet, we send the message for the first time
-            else:
-                telegram_answer = await update.message.reply_text(answer, parse_mode=ParseMode.HTML)
-                message_id = telegram_answer.message_id
-            previous_answer = answer
-            # Response = self.chatOllama.Response
+            # In case of an error, we change the parse_mode to None to avoid the HTML tags
+            try:
+                if Response.error:
+                    break
+                # This is a simple way to decrease the frequency of the messages as the answer is being longer
+                sleep_time = int(np.log2(1+while_iteration/10)+1)
+                sleep(sleep_time)
+                while_iteration += 1
+                # In case of error we stop using html parsing and tags.
+                if parse_mode is None:
+                    answer = Response.answer
+                else:
+                    answer = f"<i>{Response.answer}...</i>"
+                # We edit the message once we have a message_id
+                if message_id:
+                    # Edit the message only if the answer has changed
+                    if answer != previous_answer:
+                        await context.bot.edit_message_text(chat_id=update.effective_chat.id, message_id=message_id, text=answer, parse_mode=parse_mode)
+                # If there is no message sent yet, we send the message for the first time
+                else:
+                    telegram_answer = await update.message.reply_text(answer, parse_mode=parse_mode)
+                    message_id = telegram_answer.message_id
+                previous_answer = answer
+                # Response = self.chatOllama.Response
+            except Exception as e:
+                print(f"An error occurred while streaming the response: {e}")
+                # In case of an error, we change the parse_mode to None to avoid the HTML tags
+                parse_mode = None
         return message_id
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
