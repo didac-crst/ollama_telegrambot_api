@@ -86,13 +86,13 @@ class TelegramNotificator:
                 f"     •Name: {first_name} {last_name}\n\n"
                 f"💬 <b>Question:</b>\n{html.escape(question)}\n\n"
             )
-            if answer:
-                msg += (
-                f"🧠 <b>Answer:</b>\n{html.escape(answer)}\n\n"
-                )
             if execution_time:
                 msg += (
                 f"⏱️ <i><b>Execution time:</b> {execution_time:.2f}s</i>"
+                )
+            if answer:
+                msg += (
+                f"🧠 <b>Answer:</b>\n{html.escape(answer)}\n\n"
                 )
             self.send_telegram_message(msg)
             
@@ -305,7 +305,7 @@ class TelegramAgent:
         await self.send_disclaimer_message(update)
         question = message_payload
         # Notify the administrator about the request made to the bot
-        self.Notifier.send_message(**message_payload, answer=None, execution_time=None)
+        # self.Notifier.send_message(**message_payload, answer=None, execution_time=None)
         # Ask the question to the chatbot
         self.chatOllama.ask(question)
         # Stream the answer
